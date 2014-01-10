@@ -1,12 +1,14 @@
 
 import re
+import csv
 import json
 import logging
+import collections
+from StringIO import StringIO
 
 log = logging.getLogger(__name__)
 
 import requests
-import dateutil
 from bs4 import BeautifulSoup
 
 _default_api = None
@@ -165,6 +167,7 @@ class Api(object):
 
 
     def save(self, location = DEFAULT_SESSION_PATH):
+        log.debug("Saving session state to location %s", location)
         attrs = ['headers', 'cookies', 'auth', 'timeout', 'proxies', 'params',
                  'config', 'verify']
         
@@ -228,9 +231,21 @@ class Account(object):
         form_bits['hdnExport'] = 'Export'
         form_bits['__EVENTTARGET'] = ''
         form_bits['__EVENTARGUMENT'] = ''
+
         response = self.api.request( 
             'POST', '/Accounts/History/BankHistory.aspx',
             data=form_bits
         )
-
-        print response.text
+        
+        regex = re.compile(r'\d+/\d+/\d+')
+        return [ 
+            Transaction(*fields) 
+            for fields in csv.reader(StringIO(response.text))
+            if regex.match(fields[0])
+        ]
+        
+Transaction = collections.namedtuple(
+    "Transaction", 
+    ['date', 'type', 'checknum', 
+     'description',  'withdrawal',
+     'deposit',      'runningbalance'])

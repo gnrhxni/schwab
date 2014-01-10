@@ -2,10 +2,15 @@
 
 import re
 import sys
+import csv
 import json
 import logging
 import optparse
+import datetime
 from getpass import getpass as _getpass
+
+import dateutil.parser
+dparse = dateutil.parser.parse
 
 from . import (
     api
@@ -126,12 +131,15 @@ def accounts(args, opts):
 def transactions(args, opts):
     """ Print transactions for an account
         Usage:   transactions <Account Name | Account Number>
-        Options: --format <json | csv | human>
-                 --from <date / time>
-                 --to <date / time>
+        Options: --format <json | csv | human | tsv>  Default: Human
+                 --from <date / time>                 Default: 1 month ago
+                 --to <date / time>                   Default: today
     """
 
-    name = args[0]
+    name      = args[0]
+    fmt       = opts.get('format', 'human')
+    from_date = dparse( opts.get('from', '1 month ago'), fuzzy=True )
+    to_date   = dparse( opts.get('to', 'today'), fuzzy=True )
 
     schwab = _get_api(opts)
     account = None
@@ -141,9 +149,23 @@ def transactions(args, opts):
             account = acct
             break
 
-    print account.transactions
+    transactions = [ t for t in account.transactions
+                     if to_date > dparse(t.date) > from_date ]
+
+    if fmt == "json":
+        print json.dumps({'transactions': list(transactions) })
+    elif fmt == "csv":
+        writer = csv.writer(sys.stdout)
+        writer.writerow(transactions[0]._fields)
+        for tx in transactions:
+            writer.writerow(tx)
+    else:
+        print "\t".join(transactions[0]._fields)
+        for tx in transactions:
+            print "\t".join(tx)
 
     return 0
+
 
 def main():
     opts = dict()
